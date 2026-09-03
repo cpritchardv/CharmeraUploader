@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Local runtime state - never commit secrets or the manifest DB
+config.yaml
+token.json
+client_secret*.json
+*.db
+*.db-journal
+.pytest_cache/

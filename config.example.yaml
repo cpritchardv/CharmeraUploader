@@ -1,0 +1,52 @@
+# Copy this to /etc/charmera-uploader/config.yaml and adjust.
+
+mount_base: /mnt/charmera
+# Empty = scan the whole mounted volume. The Charmera stores stills under
+# DCIM/ and videos under a separate top-level VIDEO/ folder, so scanning
+# just "DCIM" would miss videos - leave this blank unless you want to
+# restrict to one subfolder.
+dcim_subpath: ""
+# Charmera stills are JPEG, videos are AVI - the rest are here in case you
+# swap in a different USB-storage camera later.
+file_extensions: [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov", ".avi"]
+
+# "daily": one Google Photos album per calendar date the photos were taken.
+# "single": everything goes into one persistent album (single_album_title).
+album_mode: daily
+album_title_template: "Charmera {date}"
+single_album_title: "Charmera Photos"
+
+# Only turn this on once you trust the pipeline - with it off, photos stay
+# on the camera and duplicates are simply skipped (safe default).
+delete_after_upload: false
+
+manifest_db_path: /var/lib/charmera-uploader/manifest.db
+token_path: /etc/charmera-uploader/token.json
+
+# Run `gpioinfo` on the Pi to find the chip/line numbers for whichever
+# physical header pins you wired the LEDs to. See README.md for wiring.
+processing_led:
+  chip: /dev/gpiochip0
+  line: 0
+  active_high: true
+
+complete_led:
+  chip: /dev/gpiochip0
+  line: 1
+  active_high: true
+
+# Seconds to hold the "complete" LED on after a successful run.
+# 0 = leave it on until the camera is unplugged.
+complete_led_hold_seconds: 20
+
+# Set true to test the whole pipeline without any GPIO hardware attached -
+# LED state changes are just logged instead.
+leds_simulate: false
+
+log_level: INFO
+log_path: /var/log/charmera-uploader.log
+
+# Optional safety net: restrict to specific USB vendor:model IDs
+# (find with `lsusb` while the camera is plugged in), e.g. ["04b0:0421"].
+# Leave empty to accept any USB mass-storage device.
+usb_id_allowlist: []

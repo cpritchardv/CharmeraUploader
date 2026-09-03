@@ -1,0 +1,17 @@
+[Unit]
+Description=Charmera USB photo uploader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/charmera-uploader/venv/bin/python -m charmera_uploader.daemon --config /etc/charmera-uploader/config.yaml
+Restart=on-failure
+RestartSec=5
+User=root
+# Needed to mount USB volumes and to talk to /dev/gpiochip*.
+# If you'd rather not run as root, see README.md for a udev-rule based
+# alternative that grants a dedicated user access to gpio + mount via sudo.
+
+[Install]
+WantedBy=multi-user.target
