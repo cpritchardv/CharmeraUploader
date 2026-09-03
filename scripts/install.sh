@@ -14,7 +14,7 @@ fi
 
 echo "==> Installing OS packages"
 apt-get update
-apt-get install -y python3 python3-venv python3-pip gpiod libgpiod-dev mount util-linux
+apt-get install -y python3 python3-venv python3-pip mount util-linux
 
 echo "==> Copying application to $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"

@@ -12,13 +12,6 @@ DEFAULT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov", ".avi"]
 
 
 @dataclasses.dataclass
-class LedConfig:
-    chip: str = "/dev/gpiochip0"
-    line: int = 0
-    active_high: bool = True
-
-
-@dataclasses.dataclass
 class Config:
     # Where camera partitions get mounted while we work.
     mount_base: str = "/mnt/charmera"
@@ -42,13 +35,15 @@ class Config:
     manifest_db_path: str = "/var/lib/charmera-uploader/manifest.db"
     token_path: str = "/etc/charmera-uploader/token.json"
 
-    processing_led: LedConfig = dataclasses.field(default_factory=LedConfig)
-    complete_led: LedConfig = dataclasses.field(
-        default_factory=lambda: LedConfig(chip="/dev/gpiochip0", line=1)
-    )
-    # How long to hold the "complete" LED on after a successful run.
+    # Onboard status LED, exposed by the kernel under /sys/class/leds/<name>.
+    # Run `ls /sys/class/leds/` on the Pi to find the exact name (commonly
+    # "green_led"). The Zero 2W's red power LED is hardware-only and can't
+    # be controlled, so this single LED encodes all states: off = idle,
+    # slow blink = processing, solid on = success, fast blink = error.
+    led_name: str = "green_led"
+    # How long to hold the LED solid-on after a successful run.
     # 0 means "leave it on until the camera is unplugged / the next run starts".
-    complete_led_hold_seconds: float = 20.0
+    led_success_hold_seconds: float = 20.0
     leds_simulate: bool = False
 
     log_level: str = "INFO"
@@ -66,13 +61,4 @@ class Config:
             return cls()
         with path.open("r", encoding="utf-8") as fh:
             raw: dict[str, Any] = yaml.safe_load(fh) or {}
-
-        led_raw = raw.pop("processing_led", None)
-        complete_raw = raw.pop("complete_led", None)
-
-        cfg = cls(**raw)
-        if led_raw:
-            cfg.processing_led = LedConfig(**led_raw)
-        if complete_raw:
-            cfg.complete_led = LedConfig(**complete_raw)
-        return cfg
+        return cls(**raw)

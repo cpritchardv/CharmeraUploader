@@ -1,9 +1,10 @@
 # Charmera Uploader
 
 Plug a Kodak Charmera into an Orange Pi Zero 2W over USB and its photos
-automatically get uploaded into a Google Photos album, with two status LEDs
-(processing / complete) and a local dedupe manifest so you never upload the
-same photo twice.
+automatically get uploaded into a Google Photos album, with the Pi's
+onboard status LED showing processing/complete/error and a local dedupe
+manifest so you never upload the same photo twice. No extra hardware
+required - just the Pi and the camera.
 
 ## How it works
 
@@ -16,9 +17,9 @@ same photo twice.
 3. New files get uploaded to Google Photos and added to an album (one album
    per calendar date by default, based on EXIF capture date). Files whose
    hash is already in the local manifest are skipped.
-4. The "processing" LED lights up while working; the "complete" LED lights
-   up on success (and holds for a configurable time, or until the camera is
-   unplugged). If anything fails, the processing LED blinks instead.
+4. The Pi's onboard status LED shows what's happening: off = idle, slow
+   blink = processing, solid on = success (held for a configurable time, or
+   until the camera is unplugged), fast blink = error.
 5. By default nothing is deleted from the camera - the local manifest is
    what prevents re-uploads, so it's safe to leave old photos on the card.
    Set `delete_after_upload: true` once you trust the pipeline if you'd
@@ -45,7 +46,9 @@ copied back onto the camera.
   folders: `DCIM/` (JPEG stills) and `VIDEO/` (AVI clips) - which is why
   photo scanning defaults to the whole volume rather than just `DCIM/`.
 - A USB-C to USB-C cable to connect the camera to the Pi.
-- 2x single-color LEDs + 2x current-limiting resistors (330-470 ohm).
+
+That's it - status is shown on the Pi's own onboard LED, no extra wiring
+needed (see below).
 
 ### Orange Pi USB port gotcha: enable host mode
 
@@ -71,27 +74,35 @@ linked below). Reboot after changing this.
 
 Sources: [Orange Pi Zero 2W wiki](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_2W), [Armbian forum: Orange Pi Zero 2W USB0 host mode](https://forum.armbian.com/topic/31654-orange-pi-zero-2w/page/2/), [DietPi: Enable USB0 host mode](https://dietpi.com/forum/t/orange-pi-zero-2-w-enable-usb0-host-mode/23661)
 
-### Wiring the LEDs
+### Status via the onboard LED
 
-For each LED: `GPIO pin -> resistor -> LED anode (long leg)`, and
-`LED cathode (short leg) -> GND`. Pick any two free GPIO-capable header
-pins for "processing" and "complete".
+The Zero 2W has two onboard LEDs: a red power LED that's hardware-driven
+(always on once powered, can't be controlled from software) and a green
+status LED the kernel exposes at `/sys/class/leds/<name>/`. Since only one
+LED is actually controllable, this project encodes all its states on that
+single LED via blink pattern rather than needing two separate LEDs:
 
-The exact `chip`/`line` numbers in `config.yaml` depend on which physical
-pins you use and how the SoC's GPIO banks are numbered under Linux - rather
-than guess and get it wrong, find them on the actual board:
+| State | Onboard LED |
+|---|---|
+| idle | off |
+| processing | slow blink |
+| success | solid on |
+| error | fast blink |
+
+The exact sysfs name varies by board revision/kernel, so find yours on the
+Pi with:
 
 ```
-sudo apt install gpiod
-gpioinfo          # lists every gpiochip and its line numbers/names
+ls /sys/class/leds/
 ```
 
-Wire up the LED, note which chip/line lights up when you toggle it with
-`gpioset` (e.g. `gpioset gpiochip0 5=1`), and put those values under
-`processing_led:` / `complete_led:` in `config.yaml`.
+and set it as `led_name` in `config.yaml` (commonly `green_led`, sometimes
+something like `orangepi:green:status`). The daemon needs root (which the
+systemd service already runs as) to write to it.
 
-If you don't have the hardware wired up yet, set `leds_simulate: true` to
-run everything else with LED state changes just logged instead.
+If you haven't got the Pi set up yet, or want to develop off-device, set
+`leds_simulate: true` to run everything else with LED state changes just
+logged instead.
 
 ## Software setup
 
@@ -123,9 +134,9 @@ sudo ./scripts/install.sh
 
 This installs OS packages, copies the app to `/opt/charmera-uploader`,
 creates a venv, installs Python deps, writes a default
-`/etc/charmera-uploader/config.yaml` (edit it - at minimum check the LED
-line numbers and `usb_id_allowlist`), and enables/starts the
-`charmera-uploader` systemd service.
+`/etc/charmera-uploader/config.yaml` (edit it - at minimum check `led_name`
+against `ls /sys/class/leds/` and consider setting `usb_id_allowlist`), and
+enables/starts the `charmera-uploader` systemd service.
 
 Check it's running:
 
@@ -172,15 +183,15 @@ pytest
 The test suite covers the dedupe manifest, photo scanning, album/upload
 orchestration (against a fake Google Photos client), LED state machine (in
 simulate mode), and config loading - everything that doesn't require actual
-GPIO/USB/Google API hardware access. The udev monitoring loop and the real
-Google Photos HTTP calls are deliberately thin wrappers so there's not much
-left to break; test those for real once you're on the actual Pi.
+USB/LED/Google API hardware access. The udev monitoring loop, the sysfs LED
+writes, and the real Google Photos HTTP calls are deliberately thin
+wrappers so there's not much left to break; test those for real once
+you're on the actual Pi.
 
 ## References
 
 - [Updates to the Google Photos APIs](https://developers.google.com/photos/support/updates) - the 2025 scope deprecations that shaped the local-manifest dedupe design.
 - [`mediaItems.batchCreate`](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchCreate) / [Upload media](https://developers.google.com/photos/library/guides/upload-media) - the two-step upload flow this project implements.
-- [libgpiod Python bindings: GPIO line request](https://libgpiod.readthedocs.io/en/stable/python_line_request.html) - the `request_lines`/`LineSettings` API used in `leds.py` (verified against the installed `gpiod` 2.5.0 package).
 - [pyudev user guide](https://pyudev.readthedocs.io/en/latest/guide.html) - the `Monitor`/`Device` API used in `daemon.py`.
-- [Orange Pi Zero 2W wiki](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_2W) and [Armbian forum thread on USB0 host mode](https://forum.armbian.com/topic/31654-orange-pi-zero-2w/page/2/) - the USB port/host-mode behavior described above.
+- [Orange Pi Zero 2W wiki](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_2W) and [Armbian forum thread on USB0 host mode](https://forum.armbian.com/topic/31654-orange-pi-zero-2w/page/2/) - the USB port/host-mode behavior described above, and the onboard red-power/green-status LED layout (`/sys/class/leds/`) used in `leds.py`.
 - [KODAK Charmera Quick Start Guide](https://www.bhphotovideo.com/lit_files/1267743.pdf) and [B&H product listing](https://www.bhphotovideo.com/c/product/1920220-REG/kodak_rk0601_charmera_keychain_digital_camera.html) - confirms USB Mass Storage mode, FAT32 microSD, and the DCIM/VIDEO folder layout.

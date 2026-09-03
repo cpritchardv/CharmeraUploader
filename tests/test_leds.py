@@ -1,16 +1,10 @@
 import time
 
-from charmera_uploader.config import LedConfig
-from charmera_uploader.leds import StatusLeds
+from charmera_uploader.leds import StatusLed
 
 
-def make_leds() -> StatusLeds:
-    return StatusLeds(
-        LedConfig(line=0),
-        LedConfig(line=1),
-        simulate=True,
-        complete_hold_seconds=0.05,
-    )
+def make_leds() -> StatusLed:
+    return StatusLed("green_led", simulate=True, success_hold_seconds=0.05)
 
 
 def test_state_transitions_do_not_raise():

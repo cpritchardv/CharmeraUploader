@@ -14,12 +14,8 @@ def test_load_from_yaml(tmp_path):
         album_mode: single
         single_album_title: My Charmera
         delete_after_upload: true
-        processing_led:
-          chip: /dev/gpiochip1
-          line: 5
-          active_high: false
-        complete_led:
-          line: 6
+        led_name: status_led
+        led_success_hold_seconds: 5
         """
     )
 
@@ -28,10 +24,8 @@ def test_load_from_yaml(tmp_path):
     assert cfg.album_mode == "single"
     assert cfg.single_album_title == "My Charmera"
     assert cfg.delete_after_upload is True
-    assert cfg.processing_led.chip == "/dev/gpiochip1"
-    assert cfg.processing_led.line == 5
-    assert cfg.processing_led.active_high is False
-    assert cfg.complete_led.line == 6
+    assert cfg.led_name == "status_led"
+    assert cfg.led_success_hold_seconds == 5
 
 
 def test_load_missing_file_returns_defaults(tmp_path):

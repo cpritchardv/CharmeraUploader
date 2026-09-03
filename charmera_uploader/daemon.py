@@ -20,7 +20,7 @@ from pathlib import Path
 from .camera import MountError, find_photos, mount_device, unmount_device
 from .config import Config
 from .google_photos import GooglePhotosClient
-from .leds import StatusLeds
+from .leds import StatusLed
 from .manifest import Manifest
 from .pipeline import upload_batch
 
@@ -45,7 +45,7 @@ def process_mounted_volume(
     mount_point: Path,
     cfg: Config,
     manifest: Manifest,
-    leds: StatusLeds,
+    leds: StatusLed,
     delete_originals: bool,
 ) -> None:
     leds.start_processing()
@@ -80,7 +80,7 @@ def process_mounted_volume(
         leds.error()
 
 
-def handle_device(device_node: str, cfg: Config, manifest: Manifest, leds: StatusLeds) -> None:
+def handle_device(device_node: str, cfg: Config, manifest: Manifest, leds: StatusLed) -> None:
     mount_point = Path(cfg.mount_base) / Path(device_node).name
     try:
         mount_device(device_node, mount_point, read_write=cfg.delete_after_upload)
@@ -117,11 +117,10 @@ def run_monitor(cfg: Config) -> None:
     monitor.filter_by("block")
 
     manifest = Manifest(cfg.manifest_db_path)
-    leds = StatusLeds(
-        cfg.processing_led,
-        cfg.complete_led,
+    leds = StatusLed(
+        cfg.led_name,
         simulate=cfg.leds_simulate,
-        complete_hold_seconds=cfg.complete_led_hold_seconds,
+        success_hold_seconds=cfg.led_success_hold_seconds,
     )
     leds.reset()
 
@@ -161,11 +160,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.process_path:
         manifest = Manifest(cfg.manifest_db_path)
-        leds = StatusLeds(
-            cfg.processing_led,
-            cfg.complete_led,
+        leds = StatusLed(
+            cfg.led_name,
             simulate=cfg.leds_simulate,
-            complete_hold_seconds=cfg.complete_led_hold_seconds,
+            success_hold_seconds=cfg.led_success_hold_seconds,
         )
         try:
             process_mounted_volume(

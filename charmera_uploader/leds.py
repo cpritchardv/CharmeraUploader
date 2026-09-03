@@ -1,77 +1,86 @@
-"""Single-color status LED control via libgpiod.
+"""Status indication using the Orange Pi's onboard status LED.
 
-Wiring: each LED's anode (long leg) -> a current-limiting resistor
-(330-470 ohm) -> a GPIO pin. Cathode (short leg) -> a GND pin on the
-header. Run `gpiodetect` / `gpioinfo` on the Pi to find the correct
-chip/line numbers for the physical header pins you wired up, and put
-them in config.yaml - exact line numbering depends on the board's pinout
-and isn't hardcoded here.
+The Zero 2W has two onboard LEDs: a red power LED that's hardware-driven
+(always on once powered, not controllable from software) and a green
+status LED exposed to Linux through the LED class at
+/sys/class/leds/<name>/. Since only one LED is actually controllable,
+"processing" and "complete" are encoded as different patterns on that
+single LED rather than as two separate LEDs:
 
-Set `leds_simulate: true` in config (or construct with simulate=True) to
-run without any GPIO hardware at all - status changes are just logged.
-Useful for developing off-device.
+  idle       -> off
+  processing -> slow blink
+  success    -> solid on (held for a while, then off)
+  error      -> fast blink
+
+The exact sysfs name varies by board revision/kernel - find yours with:
+
+    ls /sys/class/leds/
+
+and set it as `led_name` in config.yaml (commonly `green_led`, sometimes
+something like `orangepi:green:status`).
+
+Set `leds_simulate: true` in config to run without touching any LED at
+all - state changes are just logged. Useful for developing off-device.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-import time
-
-from .config import LedConfig
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-try:
-    import gpiod
-    from gpiod.line import Direction, Value
-except ImportError:  # pragma: no cover - exercised only off-Pi
-    gpiod = None
+LEDS_ROOT = Path("/sys/class/leds")
 
 
-class Led:
-    """A single GPIO-backed LED, or a simulated stand-in."""
+class SysfsLed:
+    """A single LED driven through the Linux LED class (/sys/class/leds/<name>)."""
 
-    def __init__(self, name: str, cfg: LedConfig, simulate: bool = False):
+    def __init__(self, name: str, simulate: bool = False):
         self.name = name
-        self.cfg = cfg
-        self.simulate = simulate or gpiod is None
-        self._request = None
+        self.simulate = simulate
+        self._path = LEDS_ROOT / name
+        self._max_brightness = 1
         self._blink_stop: threading.Event | None = None
         self._blink_thread: threading.Thread | None = None
 
-        if self.simulate:
-            if gpiod is None:
-                logger.warning(
-                    "gpiod not available - LED %r running in simulate mode", name
+        if not self.simulate:
+            if not self._path.is_dir():
+                available = (
+                    sorted(p.name for p in LEDS_ROOT.iterdir()) if LEDS_ROOT.is_dir() else []
                 )
-        else:
-            on_value = Value.ACTIVE if cfg.active_high else Value.INACTIVE
-            off_value = Value.INACTIVE if cfg.active_high else Value.ACTIVE
-            self._on_value = on_value
-            self._off_value = off_value
-            self._request = gpiod.request_lines(
-                cfg.chip,
-                consumer="charmera-uploader",
-                config={cfg.line: gpiod.LineSettings(direction=Direction.OUTPUT)},
-            )
+                raise FileNotFoundError(
+                    f"No LED at {self._path}. Available: {available or '(none found)'}. "
+                    "Run `ls /sys/class/leds/` on the Pi and set led_name in config.yaml "
+                    "to the right one, or set leds_simulate: true to test without hardware."
+                )
+            self._max_brightness = int((self._path / "max_brightness").read_text().strip())
+            try:
+                # Hand control to us instead of whatever trigger (heartbeat,
+                # mmc activity, ...) the board ships with by default.
+                (self._path / "trigger").write_text("none")
+            except OSError:
+                logger.warning(
+                    "Could not disable the default trigger on LED %r (need root?)", name
+                )
 
-    def _set(self, on: bool) -> None:
+    def _write_brightness(self, on: bool) -> None:
+        value = (self._max_brightness if on else 0) if not self.simulate else int(on)
         if self.simulate:
             logger.debug("LED[%s] -> %s (simulated)", self.name, "ON" if on else "OFF")
             return
-        value = self._on_value if on else self._off_value
-        self._request.set_value(self.cfg.line, value)
+        (self._path / "brightness").write_text(str(value))
 
     def on(self) -> None:
         self.stop_blink()
-        self._set(True)
+        self._write_brightness(True)
 
     def off(self) -> None:
         self.stop_blink()
-        self._set(False)
+        self._write_brightness(False)
 
-    def blink(self, interval: float = 0.25) -> None:
+    def blink(self, interval: float) -> None:
         """Blink in the background until stop_blink()/on()/off() is called."""
         self.stop_blink()
         self._blink_stop = threading.Event()
@@ -80,10 +89,10 @@ class Led:
         def _run() -> None:
             state = False
             while not stop_event.is_set():
-                self._set(state)
+                self._write_brightness(state)
                 state = not state
                 stop_event.wait(interval)
-            self._set(False)
+            self._write_brightness(False)
 
         self._blink_thread = threading.Thread(target=_run, daemon=True)
         self._blink_thread.start()
@@ -98,50 +107,37 @@ class Led:
 
     def close(self) -> None:
         self.stop_blink()
-        if self._request is not None:
-            self._request.release()
 
 
-class StatusLeds:
-    """The two-LED "processing" / "complete" status pair used by the daemon."""
+class StatusLed:
+    """The processing/complete/error status states, encoded on one LED."""
 
-    def __init__(
-        self,
-        processing_cfg: LedConfig,
-        complete_cfg: LedConfig,
-        simulate: bool = False,
-        complete_hold_seconds: float = 20.0,
-    ):
-        self.processing = Led("processing", processing_cfg, simulate=simulate)
-        self.complete = Led("complete", complete_cfg, simulate=simulate)
-        self.complete_hold_seconds = complete_hold_seconds
+    def __init__(self, led_name: str, simulate: bool = False, success_hold_seconds: float = 20.0):
+        self.led = SysfsLed(led_name, simulate=simulate)
+        self.success_hold_seconds = success_hold_seconds
         self._hold_timer: threading.Timer | None = None
         self.reset()
 
     def reset(self) -> None:
-        """Idle state: both LEDs off."""
+        """Idle state: LED off."""
         self._cancel_hold_timer()
-        self.processing.off()
-        self.complete.off()
+        self.led.off()
 
     def start_processing(self) -> None:
         self._cancel_hold_timer()
-        self.complete.off()
-        self.processing.on()
+        self.led.blink(interval=0.5)
 
     def success(self) -> None:
-        self.processing.off()
-        self.complete.on()
         self._cancel_hold_timer()
-        if self.complete_hold_seconds > 0:
-            self._hold_timer = threading.Timer(self.complete_hold_seconds, self.complete.off)
+        self.led.on()
+        if self.success_hold_seconds > 0:
+            self._hold_timer = threading.Timer(self.success_hold_seconds, self.led.off)
             self._hold_timer.daemon = True
             self._hold_timer.start()
 
     def error(self) -> None:
         self._cancel_hold_timer()
-        self.complete.off()
-        self.processing.blink(interval=0.15)
+        self.led.blink(interval=0.15)
 
     def _cancel_hold_timer(self) -> None:
         if self._hold_timer is not None:
@@ -150,5 +146,4 @@ class StatusLeds:
 
     def close(self) -> None:
         self._cancel_hold_timer()
-        self.processing.close()
-        self.complete.close()
+        self.led.close()

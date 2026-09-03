@@ -9,9 +9,9 @@ ExecStart=/opt/charmera-uploader/venv/bin/python -m charmera_uploader.daemon --c
 Restart=on-failure
 RestartSec=5
 User=root
-# Needed to mount USB volumes and to talk to /dev/gpiochip*.
+# Needed to mount USB volumes and to write to /sys/class/leds/*.
 # If you'd rather not run as root, see README.md for a udev-rule based
-# alternative that grants a dedicated user access to gpio + mount via sudo.
+# alternative that grants a dedicated user access to those via sudo.
 
 [Install]
 WantedBy=multi-user.target
