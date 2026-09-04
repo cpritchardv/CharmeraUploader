@@ -16,7 +16,9 @@ def test_create_album_runs_rclone_mkdir():
     with patch.object(RclonePhotosClient, "_run", return_value=_completed(0)) as run:
         album_id = client.create_album("Charmera 2025-04-02")
 
-    run.assert_called_once_with(["mkdir", "googlephotos:album/Charmera 2025-04-02"])
+    run.assert_called_once_with(
+        ["mkdir", "googlephotos:album/Charmera 2025-04-02"], timeout=RclonePhotosClient.MKDIR_TIMEOUT_SECONDS
+    )
     assert album_id == "Charmera 2025-04-02"
 
 
@@ -31,11 +33,13 @@ def test_upload_to_album_runs_rclone_copy(tmp_path):
     photo = tmp_path / "IMG_0001.jpg"
     photo.write_bytes(b"fake jpeg")
 
-    client = RclonePhotosClient("googlephotos")
+    client = RclonePhotosClient("googlephotos", upload_timeout_seconds=42)
     with patch.object(RclonePhotosClient, "_run", return_value=_completed(0)) as run:
         result = client.upload_to_album(photo, "Charmera 2025-04-02")
 
-    run.assert_called_once_with(["copy", str(photo), "googlephotos:album/Charmera 2025-04-02/"])
+    run.assert_called_once_with(
+        ["copy", str(photo), "googlephotos:album/Charmera 2025-04-02/"], timeout=42
+    )
     assert result == "IMG_0001.jpg"
 
 

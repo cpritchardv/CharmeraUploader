@@ -40,6 +40,10 @@ class Config:
     # Cloud Console project, OAuth branding, or verification is needed at
     # all - just `rclone config` and a normal Google sign-in. See README.
     rclone_remote: str = "googlephotos"
+    # Per-file upload ceiling. Generous on purpose: this Pi has no ethernet
+    # (WiFi only), and video clips can be tens of MB, so a short timeout
+    # would fail slow-but-working uploads, not just genuinely stuck ones.
+    rclone_upload_timeout_seconds: float = 600.0
 
     # Onboard status LED, exposed by the kernel under /sys/class/leds/<name>.
     # Run `ls /sys/class/leds/` on the Pi to find the exact name (commonly

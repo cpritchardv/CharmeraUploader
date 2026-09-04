@@ -28,6 +28,11 @@ manifest_db_path: /var/lib/charmera-uploader/manifest.db
 # project of your own is needed.
 rclone_remote: googlephotos
 
+# Per-file upload ceiling in seconds. The Zero 2W has no ethernet (WiFi
+# only), and video clips can be tens of MB, so this is generous on purpose -
+# a short timeout would fail slow-but-working uploads, not just stuck ones.
+rclone_upload_timeout_seconds: 600
+
 # Onboard status LED (no external LEDs/wiring needed). The Zero 2W's red
 # power LED is hardware-only and can't be controlled; this uses the green
 # one. Find the exact sysfs name for your board/kernel with:

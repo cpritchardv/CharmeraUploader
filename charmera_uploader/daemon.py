@@ -56,7 +56,7 @@ def process_mounted_volume(
             leds.success()
             return
 
-        client = RclonePhotosClient(cfg.rclone_remote)
+        client = RclonePhotosClient(cfg.rclone_remote, upload_timeout_seconds=cfg.rclone_upload_timeout_seconds)
         result = upload_batch(photos, cfg, manifest, client)
 
         logger.info(

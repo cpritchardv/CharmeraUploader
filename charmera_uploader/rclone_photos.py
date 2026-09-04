@@ -30,16 +30,24 @@ class RclonePhotosError(RuntimeError):
 
 
 class RclonePhotosClient:
-    def __init__(self, remote: str):
-        self.remote = remote
+    # `rclone mkdir` is a trivial metadata-only call, so a short timeout is
+    # fine there regardless of network speed. Uploads are a different
+    # story: video files can be tens of MB, and this Pi has no ethernet
+    # (WiFi only - see README), so a generous ceiling avoids spuriously
+    # failing an upload that's just slow, not stuck.
+    MKDIR_TIMEOUT_SECONDS = 30
 
-    def _run(self, args: list[str]) -> subprocess.CompletedProcess:
+    def __init__(self, remote: str, upload_timeout_seconds: float = 600):
+        self.remote = remote
+        self.upload_timeout_seconds = upload_timeout_seconds
+
+    def _run(self, args: list[str], timeout: float) -> subprocess.CompletedProcess:
         cmd = ["rclone", *args]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return result
 
     def create_album(self, title: str) -> str:
-        result = self._run(["mkdir", f"{self.remote}:album/{title}"])
+        result = self._run(["mkdir", f"{self.remote}:album/{title}"], timeout=self.MKDIR_TIMEOUT_SECONDS)
         if result.returncode != 0:
             raise RclonePhotosError(f"rclone mkdir for album {title!r} failed: {result.stderr.strip()}")
         logger.info("Created (or confirmed) Google Photos album %r via rclone", title)
@@ -48,7 +56,7 @@ class RclonePhotosClient:
     def upload_to_album(self, path: Path, album_id: str) -> str:
         """Uploads one file into the album. album_id is the album title (see module docstring)."""
         destination = f"{self.remote}:album/{album_id}/"
-        result = self._run(["copy", str(path), destination])
+        result = self._run(["copy", str(path), destination], timeout=self.upload_timeout_seconds)
         if result.returncode != 0:
             raise RclonePhotosError(f"rclone copy {path} -> {destination} failed: {result.stderr.strip()}")
         return path.name
