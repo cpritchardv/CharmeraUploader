@@ -126,30 +126,40 @@ working yet - that needs step 2 below).
 
 ### 2. Google Photos API credentials
 
-The auth setup uses OAuth's device flow, so it runs entirely on the Pi -
-you only need a browser *somewhere* (your phone is fine) to approve access,
-nothing to install on it.
+Google's OAuth *device flow* (the short-code-on-any-device approach) does
+**not** work for Google Photos scopes - Google's API rejects it outright
+with `invalid_scope`. And a LAN IP address doesn't work as a redirect
+target either - Google only allows `localhost` over plain HTTP. So this
+uses an SSH port forward instead: you approve access in a browser on your
+own computer, and SSH quietly tunnels the callback back to the Pi. No
+files to copy between machines, no code to copy/paste.
 
 1. From any browser, in [Google Cloud Console](https://console.cloud.google.com/):
    create a project (or use an existing one) and enable the **Google Photos
    Library API**.
-2. Create OAuth 2.0 credentials of type **TVs and Limited Input devices**
-   (not "Desktop app" - only this type supports the device flow). The
-   client ID and client secret are shown right on the credentials page.
-3. On the Pi, in the repo you just cloned:
-
+2. Create OAuth 2.0 credentials of type **Web application** (not "Desktop
+   app" or "TVs and Limited Input devices" - neither works here). Under
+   **Authorized redirect URIs**, add exactly:
+   ```
+   http://localhost:8765/
+   ```
+   The client ID and client secret are shown on the same page.
+3. Log into the Pi with a port forward added to your usual SSH command:
+   ```
+   ssh -L 8765:localhost:8765 root@<pi-ip-or-hostname>
+   ```
+4. In that same SSH session, in the repo you cloned:
    ```
    /opt/charmera-uploader/venv/bin/python scripts/setup_google_auth.py \
        --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET \
        --out /etc/charmera-uploader/token.json
    ```
-
-   It'll print a URL and a short code. Open the URL on your phone (or any
-   browser), enter the code, approve access, and the script writes
-   `token.json` straight to the path the daemon expects - no copying
-   files between machines.
-4. Restart the service so it picks up the new credentials:
-
+   It prints a Google sign-in URL. Open it in a browser **on the same
+   computer you ran that `ssh -L` command from** (not your phone - the
+   tunnel only exists on that one machine). Sign in and approve. The
+   script picks up the redirect automatically and writes `token.json` -
+   nothing more to do.
+5. Restart the service so it picks up the new credentials:
    ```
    systemctl restart charmera-uploader
    systemctl status charmera-uploader
