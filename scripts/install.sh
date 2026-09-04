@@ -14,7 +14,7 @@ fi
 
 echo "==> Installing OS packages"
 apt-get update
-apt-get install -y python3 python3-venv python3-pip mount util-linux curl
+apt-get install -y python3 python3-venv python3-pip mount util-linux curl unzip
 
 echo "==> Installing rclone"
 if ! command -v rclone >/dev/null 2>&1; then
