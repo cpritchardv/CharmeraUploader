@@ -6,9 +6,13 @@ mount_base: /mnt/charmera
 # just "DCIM" would miss videos - leave this blank unless you want to
 # restrict to one subfolder.
 dcim_subpath: ""
-# Charmera stills are JPEG, videos are AVI - the rest are here in case you
-# swap in a different USB-storage camera later.
-file_extensions: [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov", ".avi"]
+# Charmera stills are JPEG. Video (.avi) is deliberately excluded by
+# default: rclone's Google Photos backend has documented issues hanging
+# on video uploads (see README's References). Add video extensions back
+# here if you want to try it anyway - failed uploads just retry next time
+# the camera's plugged in, they won't break anything, just occasionally
+# stall for a while.
+file_extensions: [".jpg", ".jpeg", ".png", ".heic"]
 
 # "daily": one Google Photos album per calendar date the photos were taken.
 # "single": everything goes into one persistent album (single_album_title).

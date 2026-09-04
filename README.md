@@ -10,13 +10,20 @@ required - just the Pi and the camera.
 
 1. A small daemon (`charmera_uploader.daemon`) runs at boot and watches for
    USB storage devices via udev.
-2. When the camera shows up as a USB mass-storage volume, it's mounted,
-   scanned for photos/videos (the whole volume by default - Charmera keeps
-   stills in `DCIM/` and videos in a separate `VIDEO/` folder), and each new
-   file is hashed (SHA-256).
+2. When the camera shows up as a USB mass-storage volume, it's mounted and
+   scanned (the whole volume by default, matched by `file_extensions` in
+   config), and each matching file is hashed (SHA-256).
 3. New files get uploaded to Google Photos and added to an album (one album
-   per calendar date by default, based on EXIF capture date). Files whose
-   hash is already in the local manifest are skipped.
+   per calendar date by default, based on EXIF capture date - set
+   `album_mode: single` in config.yaml for one persistent album instead).
+   Files whose hash is already in the local manifest are skipped.
+
+**Stills only by default.** `file_extensions` ships without video
+extensions (`.avi` etc.) because rclone's Google Photos backend has
+documented issues hanging on video uploads (see References). You can add
+video extensions back in `config.yaml` if you want to try it - a hung/failed
+upload just retries next time the camera's plugged in, it won't break
+anything else, just occasionally stall that one file for a while.
 4. The Pi's onboard status LED shows what's happening: off = idle, slow
    blink = processing, solid on = success (held for a configurable time, or
    until the camera is unplugged), fast blink = error.
@@ -224,6 +231,7 @@ to break; test those for real once you're on the actual Pi.
 - [Updates to the Google Photos APIs](https://developers.google.com/photos/support/updates) - the 2025 scope deprecations that shaped the local-manifest dedupe design (still relevant even via rclone, which is subject to the same restrictions).
 - [rclone: Google Photos](https://rclone.org/googlephotos/) and [rclone: Remote Setup](https://rclone.org/remote_setup/) - the shared-client setup and headless/SSH-tunnel authorization flow used in the setup steps above and verified against `rclone config`'s actual prompts.
 - [rclone GitHub issue #9580: retiring the shared client_id](https://github.com/rclone/rclone/issues/9580) - why the "no Console setup needed" path is expected to eventually require your own client ID.
+- [rclone GitHub issue #6394](https://github.com/rclone/rclone/issues/6394) and [rclone forum: stuck retrieving video files](https://forum.rclone.org/t/rclone-stuck-retrieving-some-video-files-from-google-photo/12519) - documented hangs on video specifically, confirmed on real hardware (a small `.avi` hit the upload timeout), which is why video extensions are excluded from `file_extensions` by default.
 - [pyudev user guide](https://pyudev.readthedocs.io/en/latest/guide.html) - the `Monitor`/`Device` API used in `daemon.py`.
 - [Orange Pi Zero 2W wiki](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_2W) and [Armbian forum thread on USB0 host mode](https://forum.armbian.com/topic/31654-orange-pi-zero-2w/page/2/) - the USB port/host-mode behavior described above, and the onboard red-power/green-status LED layout (`/sys/class/leds/`) used in `leds.py`.
 - [KODAK Charmera Quick Start Guide](https://www.bhphotovideo.com/lit_files/1267743.pdf) and [B&H product listing](https://www.bhphotovideo.com/c/product/1920220-REG/kodak_rk0601_charmera_keychain_digital_camera.html) - confirms USB Mass Storage mode, FAT32 microSD, and the DCIM/VIDEO folder layout.
