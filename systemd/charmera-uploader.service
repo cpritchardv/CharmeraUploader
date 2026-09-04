@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+WorkingDirectory=/opt/charmera-uploader
 ExecStart=/opt/charmera-uploader/venv/bin/python -m charmera_uploader.daemon --config /etc/charmera-uploader/config.yaml
 Restart=on-failure
 RestartSec=5
