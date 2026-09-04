@@ -9,7 +9,7 @@ from charmera_uploader.manifest import Manifest
 from charmera_uploader.pipeline import album_title_for, upload_batch
 
 
-class FakeGooglePhotosClient:
+class FakePhotosClient:
     def __init__(self, fail_files: set[str] | None = None):
         self.albums_created: list[str] = []
         self.uploaded: list[tuple[Path, str]] = []
@@ -45,7 +45,7 @@ def test_album_title_daily_vs_single():
 def test_upload_batch_creates_one_album_per_day_and_skips_duplicates(tmp_path):
     cfg = Config(album_mode="daily")
     manifest = Manifest(tmp_path / "manifest.db")
-    client = FakeGooglePhotosClient()
+    client = FakePhotosClient()
 
     day1 = dt.date(2025, 4, 2)
     photos = [
@@ -68,7 +68,7 @@ def test_upload_batch_creates_one_album_per_day_and_skips_duplicates(tmp_path):
 def test_upload_batch_records_per_file_failures_without_aborting(tmp_path):
     cfg = Config(album_mode="single")
     manifest = Manifest(tmp_path / "manifest.db")
-    client = FakeGooglePhotosClient(fail_files={"bad.jpg"})
+    client = FakePhotosClient(fail_files={"bad.jpg"})
 
     day1 = dt.date(2025, 4, 2)
     photos = [

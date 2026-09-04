@@ -33,7 +33,12 @@ class Config:
     delete_after_upload: bool = False
 
     manifest_db_path: str = "/var/lib/charmera-uploader/manifest.db"
-    token_path: str = "/etc/charmera-uploader/token.json"
+    # Name of the rclone remote (from `rclone config`) pointing at a Google
+    # Photos backend. Uploads run as `rclone copy <file> <remote>:album/<title>/`.
+    # Using rclone's already Google-verified shared client means no Google
+    # Cloud Console project, OAuth branding, or verification is needed at
+    # all - just `rclone config` and a normal Google sign-in. See README.
+    rclone_remote: str = "googlephotos"
 
     # Onboard status LED, exposed by the kernel under /sys/class/leds/<name>.
     # Run `ls /sys/class/leds/` on the Pi to find the exact name (commonly

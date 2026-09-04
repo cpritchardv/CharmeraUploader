@@ -117,49 +117,52 @@ cd CharmeraUploader
 sudo ./scripts/install.sh
 ```
 
-This installs OS packages, copies the app to `/opt/charmera-uploader`,
-creates a venv, installs Python deps, writes a default
-`/etc/charmera-uploader/config.yaml` (edit it - at minimum check `led_name`
-against `ls /sys/class/leds/` and consider setting `usb_id_allowlist`), and
-enables/starts the `charmera-uploader` systemd service (it won't be fully
-working yet - that needs step 2 below).
+This installs OS packages (including `rclone` - see below), copies the app
+to `/opt/charmera-uploader`, creates a venv, installs Python deps, writes a
+default `/etc/charmera-uploader/config.yaml` (edit it - at minimum check
+`led_name` against `ls /sys/class/leds/` and consider setting
+`usb_id_allowlist`), and enables/starts the `charmera-uploader` systemd
+service (it won't be fully working yet - that needs step 2 below).
 
-### 2. Google Photos API credentials
+### 2. Connect Google Photos (via rclone - no Google Cloud Console needed)
 
-Google's OAuth *device flow* (the short-code-on-any-device approach) does
-**not** work for Google Photos scopes - Google's API rejects it outright
-with `invalid_scope`. And a LAN IP address doesn't work as a redirect
-target either - Google only allows `localhost` over plain HTTP. So this
-uses an SSH port forward instead: you approve access in a browser on your
-own computer, and SSH quietly tunnels the callback back to the Pi. No
-files to copy between machines, no code to copy/paste.
+Uploads go through [rclone](https://rclone.org/), not a hand-rolled Google
+API integration. This matters: registering your *own* app with Google for
+the Photos API means either re-authorizing every 7 days, or completing
+full app branding (homepage, privacy policy, terms of service) and
+publishing it - real requirements, not a shortcut anyone's missing. rclone
+sidesteps all of that because it ships its own OAuth client that Google
+already verified, shared across every rclone user. Setup is just signing
+into your own Google account - no project, no branding, no verification.
 
-1. From any browser, in [Google Cloud Console](https://console.cloud.google.com/):
-   create a project (or use an existing one) and enable the **Google Photos
-   Library API**.
-2. Create OAuth 2.0 credentials of type **Web application** (not "Desktop
-   app" or "TVs and Limited Input devices" - neither works here). Under
-   **Authorized redirect URIs**, add exactly:
+1. Log into the Pi with a port forward added to your usual SSH command
+   (needed for the browser sign-in step below to reach the Pi):
    ```
-   http://localhost:8765/
+   ssh -L 53682:localhost:53682 root@<pi-ip-or-hostname>
    ```
-   The client ID and client secret are shown on the same page.
-3. Log into the Pi with a port forward added to your usual SSH command:
+2. In that same SSH session:
    ```
-   ssh -L 8765:localhost:8765 root@<pi-ip-or-hostname>
+   rclone config
    ```
-4. In that same SSH session, in the repo you cloned:
+   - `n` for a new remote
+   - name it exactly `googlephotos` (matches this project's default
+     `rclone_remote` setting)
+   - storage type: search for and pick **Google Photos**
+   - client_id / client_secret: leave both **blank** (press Enter) - this
+     is what makes it use rclone's pre-verified client instead of your own
+   - "Edit advanced config": No
+   - "Use web browser to automatically authenticate": **Yes**
+3. It prints a Google sign-in URL (or opens it automatically depending on
+   your terminal). Open it in a browser **on the same computer you ran
+   that `ssh -L` command from** (not your phone - the tunnel only exists
+   on that machine). Sign in and approve. `rclone config` finishes on its
+   own once you do.
+4. Confirm it worked:
    ```
-   /opt/charmera-uploader/venv/bin/python scripts/setup_google_auth.py \
-       --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET \
-       --out /etc/charmera-uploader/token.json
+   rclone lsd googlephotos:album
    ```
-   It prints a Google sign-in URL. Open it in a browser **on the same
-   computer you ran that `ssh -L` command from** (not your phone - the
-   tunnel only exists on that one machine). Sign in and approve. The
-   script picks up the redirect automatically and writes `token.json` -
-   nothing more to do.
-5. Restart the service so it picks up the new credentials:
+   (an empty list is fine - it just means no albums yet).
+5. Restart the service:
    ```
    systemctl restart charmera-uploader
    systemctl status charmera-uploader
@@ -167,6 +170,13 @@ files to copy between machines, no code to copy/paste.
    ```
 
 Plug in the camera and watch the log / LED.
+
+Note: rclone's shared client for Google Photos is expected to be retired
+at some point (Google has been phasing out shared/community OAuth clients
+across the ecosystem) - if `rclone config` ever stops working this way,
+rclone's own docs cover creating your own client ID as a fallback, at
+which point you're back to the Google Cloud Console path this section was
+written to avoid.
 
 ### Restricting to just the Charmera (optional but recommended)
 
@@ -202,17 +212,18 @@ pytest
 ```
 
 The test suite covers the dedupe manifest, photo scanning, album/upload
-orchestration (against a fake Google Photos client), LED state machine (in
+orchestration (against a fake photos client), the rclone command
+construction (with `rclone` itself mocked out), LED state machine (in
 simulate mode), and config loading - everything that doesn't require actual
-USB/LED/Google API hardware access. The udev monitoring loop, the sysfs LED
-writes, and the real Google Photos HTTP calls are deliberately thin
-wrappers so there's not much left to break; test those for real once
-you're on the actual Pi.
+USB/LED/rclone/Google hardware access. The udev monitoring loop and the
+sysfs LED writes are deliberately thin wrappers so there's not much left
+to break; test those for real once you're on the actual Pi.
 
 ## References
 
-- [Updates to the Google Photos APIs](https://developers.google.com/photos/support/updates) - the 2025 scope deprecations that shaped the local-manifest dedupe design.
-- [`mediaItems.batchCreate`](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchCreate) / [Upload media](https://developers.google.com/photos/library/guides/upload-media) - the two-step upload flow this project implements.
+- [Updates to the Google Photos APIs](https://developers.google.com/photos/support/updates) - the 2025 scope deprecations that shaped the local-manifest dedupe design (still relevant even via rclone, which is subject to the same restrictions).
+- [rclone: Google Photos](https://rclone.org/googlephotos/) and [rclone: Remote Setup](https://rclone.org/remote_setup/) - the shared-client setup and headless/SSH-tunnel authorization flow used in the setup steps above and verified against `rclone config`'s actual prompts.
+- [rclone GitHub issue #9580: retiring the shared client_id](https://github.com/rclone/rclone/issues/9580) - why the "no Console setup needed" path is expected to eventually require your own client ID.
 - [pyudev user guide](https://pyudev.readthedocs.io/en/latest/guide.html) - the `Monitor`/`Device` API used in `daemon.py`.
 - [Orange Pi Zero 2W wiki](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_Zero_2W) and [Armbian forum thread on USB0 host mode](https://forum.armbian.com/topic/31654-orange-pi-zero-2w/page/2/) - the USB port/host-mode behavior described above, and the onboard red-power/green-status LED layout (`/sys/class/leds/`) used in `leds.py`.
 - [KODAK Charmera Quick Start Guide](https://www.bhphotovideo.com/lit_files/1267743.pdf) and [B&H product listing](https://www.bhphotovideo.com/c/product/1920220-REG/kodak_rk0601_charmera_keychain_digital_camera.html) - confirms USB Mass Storage mode, FAT32 microSD, and the DCIM/VIDEO folder layout.

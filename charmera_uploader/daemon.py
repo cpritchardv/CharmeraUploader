@@ -19,10 +19,10 @@ from pathlib import Path
 
 from .camera import MountError, find_photos, mount_device, unmount_device
 from .config import Config
-from .google_photos import GooglePhotosClient
 from .leds import StatusLed
 from .manifest import Manifest
 from .pipeline import upload_batch
+from .rclone_photos import RclonePhotosClient
 
 logger = logging.getLogger("charmera_uploader")
 
@@ -56,7 +56,7 @@ def process_mounted_volume(
             leds.success()
             return
 
-        client = GooglePhotosClient(cfg.token_path)
+        client = RclonePhotosClient(cfg.rclone_remote)
         result = upload_batch(photos, cfg, manifest, client)
 
         logger.info(

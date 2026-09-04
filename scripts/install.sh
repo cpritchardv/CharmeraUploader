@@ -14,7 +14,14 @@ fi
 
 echo "==> Installing OS packages"
 apt-get update
-apt-get install -y python3 python3-venv python3-pip mount util-linux
+apt-get install -y python3 python3-venv python3-pip mount util-linux curl
+
+echo "==> Installing rclone"
+if ! command -v rclone >/dev/null 2>&1; then
+  curl https://rclone.org/install.sh | bash
+else
+  echo "    Already installed: $(rclone version | head -1)"
+fi
 
 echo "==> Copying application to $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
@@ -31,9 +38,9 @@ if [[ ! -f /etc/charmera-uploader/config.yaml ]]; then
   cp "$INSTALL_DIR/config.example.yaml" /etc/charmera-uploader/config.yaml
   echo "    Wrote default config to /etc/charmera-uploader/config.yaml - edit it, then re-run."
 fi
-if [[ ! -f /etc/charmera-uploader/token.json ]]; then
-  echo "    NOTE: /etc/charmera-uploader/token.json is missing."
-  echo "    Run scripts/setup_google_auth.py on a machine with a browser and copy the result here."
+if ! rclone listremotes 2>/dev/null | grep -q '^googlephotos:'; then
+  echo "    NOTE: no 'googlephotos' rclone remote configured yet."
+  echo "    Run 'rclone config' (as root) to set one up - see README.md."
 fi
 
 echo "==> Installing systemd service"

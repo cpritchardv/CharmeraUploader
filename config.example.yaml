@@ -21,7 +21,12 @@ single_album_title: "Charmera Photos"
 delete_after_upload: false
 
 manifest_db_path: /var/lib/charmera-uploader/manifest.db
-token_path: /etc/charmera-uploader/token.json
+
+# Name of the rclone remote (from `rclone config`, run as root) pointing at
+# a Google Photos backend. See README.md for the one-time setup - it uses
+# rclone's own already-Google-verified client, so no Google Cloud Console
+# project of your own is needed.
+rclone_remote: googlephotos
 
 # Onboard status LED (no external LEDs/wiring needed). The Zero 2W's red
 # power LED is hardware-only and can't be controlled; this uses the green

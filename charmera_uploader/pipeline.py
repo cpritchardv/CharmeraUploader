@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from pathlib import Path
+from typing import Protocol
 
 from .camera import PhotoFile
 from .config import Config
-from .google_photos import GooglePhotosClient
 from .manifest import Manifest
 
 logger = logging.getLogger(__name__)
+
+
+class PhotosClient(Protocol):
+    """Whatever uploads photos - currently RclonePhotosClient (see rclone_photos.py)."""
+
+    def create_album(self, title: str) -> str: ...
+    def upload_to_album(self, path: Path, album_id: str) -> str: ...
 
 
 @dataclasses.dataclass
@@ -30,7 +38,7 @@ def album_title_for(cfg: Config, photo: PhotoFile) -> str:
     return cfg.album_title_template.format(date=photo.captured_at.isoformat())
 
 
-def get_or_create_album(manifest: Manifest, client: GooglePhotosClient, title: str) -> str:
+def get_or_create_album(manifest: Manifest, client: PhotosClient, title: str) -> str:
     album_id = manifest.get_album_id(title)
     if album_id is not None:
         return album_id
@@ -43,7 +51,7 @@ def upload_batch(
     photos: list[PhotoFile],
     cfg: Config,
     manifest: Manifest,
-    client: GooglePhotosClient,
+    client: PhotosClient,
 ) -> BatchResult:
     result = BatchResult()
 
