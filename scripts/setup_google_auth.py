@@ -52,7 +52,15 @@ def main() -> None:
         data={"client_id": args.client_id, "scope": " ".join(SCOPES)},
         timeout=30,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        print(f"Error requesting a device code: {resp.status_code} {resp.text}", file=sys.stderr)
+        print(
+            "Double check --client-id is the client from an OAuth client of type "
+            "'TVs and Limited Input devices' (not 'Desktop app'), copied with no "
+            "extra spaces/quotes.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     device = resp.json()
 
     print()
