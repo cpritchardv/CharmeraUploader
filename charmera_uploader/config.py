@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -66,4 +67,19 @@ class Config:
             return cls()
         with path.open("r", encoding="utf-8") as fh:
             raw: dict[str, Any] = yaml.safe_load(fh) or {}
+
+        # Config files live on deployed devices and outlive any one version
+        # of this schema (e.g. token_path existed before the rclone
+        # migration). Rather than crash-loop the whole service on a stale
+        # key, drop it and say so - logging isn't set up yet at this point,
+        # so this goes straight to stderr (systemd/journald still catches it).
+        known_fields = {f.name for f in dataclasses.fields(cls)}
+        unknown = set(raw) - known_fields
+        if unknown:
+            print(
+                f"config.py: ignoring unknown config key(s) in {path}: {sorted(unknown)}",
+                file=sys.stderr,
+            )
+            raw = {k: v for k, v in raw.items() if k in known_fields}
+
         return cls(**raw)
