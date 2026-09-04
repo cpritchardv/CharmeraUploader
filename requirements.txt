@@ -1,6 +1,5 @@
 pyudev>=0.24
 google-auth>=2.30
-google-auth-oauthlib>=1.2
 requests>=2.31
 Pillow>=10.3
 PyYAML>=6.0

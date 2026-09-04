@@ -106,25 +106,10 @@ logged instead.
 
 ## Software setup
 
-### 1. Google Photos API credentials
+Everything here runs on the Pi itself - nothing needs installing on your
+own computer.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a
-   project and enable the **Google Photos Library API**.
-2. Create an OAuth 2.0 Client ID of type **Desktop app**, download the
-   client secret JSON.
-3. On a computer with a browser (not the Pi):
-
-   ```
-   pip install -r requirements.txt
-   python scripts/setup_google_auth.py --client-secret client_secret.json --out token.json
-   ```
-
-   This opens a browser for you to sign in and consent, then writes
-   `token.json` (which contains a refresh token - keep it private).
-4. Copy `token.json` to the Pi, to the path set as `token_path` in
-   `config.yaml` (default `/etc/charmera-uploader/token.json`).
-
-### 2. Install on the Pi
+### 1. Install on the Pi
 
 ```
 git clone https://github.com/cpritchardv/CharmeraUploader.git
@@ -136,16 +121,42 @@ This installs OS packages, copies the app to `/opt/charmera-uploader`,
 creates a venv, installs Python deps, writes a default
 `/etc/charmera-uploader/config.yaml` (edit it - at minimum check `led_name`
 against `ls /sys/class/leds/` and consider setting `usb_id_allowlist`), and
-enables/starts the `charmera-uploader` systemd service.
+enables/starts the `charmera-uploader` systemd service (it won't be fully
+working yet - that needs step 2 below).
 
-Check it's running:
+### 2. Google Photos API credentials
 
-```
-systemctl status charmera-uploader
-journalctl -u charmera-uploader -f
-```
+The auth setup uses OAuth's device flow, so it runs entirely on the Pi -
+you only need a browser *somewhere* (your phone is fine) to approve access,
+nothing to install on it.
 
-Plug in the camera and watch the log / LEDs.
+1. From any browser, in [Google Cloud Console](https://console.cloud.google.com/):
+   create a project (or use an existing one) and enable the **Google Photos
+   Library API**.
+2. Create OAuth 2.0 credentials of type **TVs and Limited Input devices**
+   (not "Desktop app" - only this type supports the device flow). The
+   client ID and client secret are shown right on the credentials page.
+3. On the Pi, in the repo you just cloned:
+
+   ```
+   /opt/charmera-uploader/venv/bin/python scripts/setup_google_auth.py \
+       --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET \
+       --out /etc/charmera-uploader/token.json
+   ```
+
+   It'll print a URL and a short code. Open the URL on your phone (or any
+   browser), enter the code, approve access, and the script writes
+   `token.json` straight to the path the daemon expects - no copying
+   files between machines.
+4. Restart the service so it picks up the new credentials:
+
+   ```
+   systemctl restart charmera-uploader
+   systemctl status charmera-uploader
+   journalctl -u charmera-uploader -f
+   ```
+
+Plug in the camera and watch the log / LED.
 
 ### Restricting to just the Charmera (optional but recommended)
 
